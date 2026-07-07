@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PD Chart — Peritoneal Dialysis Tracker</title>
+<style>
+  :root{
+    --color-bg: #F4F6F5;
+    --color-surface: #FFFFFF;
+    --color-surface-alt: #EEF3F3;
+    --color-ink: #1E2A2E;
+    --color-muted: #647278;
+    --color-line: #DCE3E2;
+    --color-primary: #2B6777;
+    --color-primary-dark: #1D4A56;
+    --color-primary-tint: #DCE9EA;
+    --color-accent: #4E9E8C;
+    --color-accent-tint: #DCEEE7;
+    --color-amber: #C08A2E;
+    --color-amber-tint: #FBF0DB;
+    --color-red: #B14636;
+    --color-red-tint: #F8E4E0;
+    --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'SF Mono', 'Consolas', 'Menlo', 'Liberation Mono', monospace;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(30,42,46,0.06), 0 4px 14px rgba(30,42,46,0.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--color-bg);
+    color:var(--color-ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:var(--font-display); font-weight:700; margin:0 0 4px 0; letter-spacing:0.2px;}
+  .mono{font-family:var(--font-mono);}
+  button{font-family:inherit;}
+  input,select,textarea{font-family:inherit; font-size:0.95rem;}
+  a{color:var(--color-primary);}
+
+  /* ---------- Layout shell ---------- */
+  .app-header{background:var(--color-primary-dark); color:#fff; padding:18px clamp(14px,4vw,32px) 0;}
+  .app-header .title-row{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; max-width:1140px; margin:0 auto;}
+  .app-header h1{color:#fff; font-size:1.5rem;}
+  .app-header .subtitle{color:#BFD6D9; font-size:0.85rem;}
+
+  nav.tabs{max-width:1140px; margin:14px auto 0; display:flex; gap:4px; border-bottom:1px solid rgba(255,255,255,0.15); overflow-x:auto;}
+  nav.tabs button{background:none; border:none; color:#BFD6D9; padding:10px 16px; font-size:0.92rem; cursor:pointer; border-bottom:2px solid transparent; transition:color .15s ease, border-color .15s ease; white-space:nowrap;}
+  nav.tabs button:hover{color:#fff;}
+  nav.tabs button.active{color:#fff; border-bottom-color:var(--color-accent); font-weight:600;}
+  nav.tabs button:focus-visible{outline:2px solid #fff; outline-offset:2px;}
+
+  main{max-width:1140px; margin:0 auto; padding:22px clamp(14px,4vw,32px) 60px;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- Cards / sections ---------- */
+  .panel{background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius); box-shadow:var(--shadow);}
+  .toolbar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius); padding:14px 16px; margin-bottom:18px; box-shadow:var(--shadow);}
+  .toolbar label{font-size:0.82rem; color:var(--color-muted); display:block; margin-bottom:3px;}
+  .field-inline{display:flex; flex-direction:column;}
+  .toolbar input[type="date"], .toolbar select{border:1px solid var(--color-line); border-radius:6px; padding:7px 9px; font-size:0.95rem;}
+  .day-summary{margin-left:auto; text-align:right; font-size:0.85rem; color:var(--color-muted);}
+  .day-summary strong{color:var(--color-ink); font-family:var(--font-mono);}
+
+  /* ---------- Dashboard ---------- */
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px;}
+  .stat-card{background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
+  .stat-card .stat-label{font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--color-muted); font-weight:700; margin-bottom:6px;}
+  .stat-card .stat-value{font-family:var(--font-mono); font-size:1.5rem; color:var(--color-ink); line-height:1;}
+  .stat-card .stat-sub{font-size:0.76rem; color:var(--color-muted); margin-top:4px;}
+  .stat-card.warn{border-color:var(--color-amber); background:var(--color-amber-tint);}
+  .stat-card.danger{border-color:var(--color-red); background:var(--color-red-tint);}
+  .stat-card.good{border-color:var(--color-accent); background:var(--color-accent-tint);}
+
+  .quick-actions{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px;}
+
+  @media print {
+    .app-header nav.tabs, .quick-actions, .export-section, .cycle-form-panel__head button, .cycle-form-actions, button, input[type="button"], input[type="submit"] {display:none !important;}
+    main{padding:20px 0;}
+  }
+
+  /* ---------- Data Manager Styles ---------- */
+  #view-data-manager .field label{color:var(--color-muted); font-weight:600; font-size:0.82rem; display:block; margin-bottom:6px;}
+  #view-data-manager .field input[type="date"]{border:1px solid var(--color-line); border-radius:6px; padding:8px 10px; width:100%; font-size:0.95rem;}
+  #view-data-manager .field input[type="date"]:focus{outline:2px solid var(--color-accent); outline-offset:1px; border-color:var(--color-accent);}
+  #view-data-manager .panel h3{color:var(--color-ink); font-size:1rem; margin:0 0 16px 0; font-family:var(--font-display);}
+  #view-data-manager .panel{display:grid; grid-template-columns:1fr; gap:0; align-items:start;}
+
+  .dash-columns{display:grid; grid-template-columns:1.3fr 1fr; gap:18px;}
+  @media (max-width:820px){.dash-columns{grid-template-columns:1fr;}}
+  .dash-panel{background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
+  .dash-panel h2{font-size:1rem; margin-bottom:12px;}
+  .mini-cycle-row{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--color-line); font-size:0.85rem;}
+  .mini-cycle-row:last-child{border-bottom:none;}
+  .mini-cycle-row .dot{width:9px; height:9px; border-radius:50%; background:var(--color-line); flex-shrink:0;}
+  .mini-cycle-row .dot.saved{background:var(--color-accent);}
+  .mini-cycle-row .label{flex:1; color:var(--color-muted);}
+  .mini-cycle-row .val{font-family:var(--font-mono);}
+  .alert-item{display:flex; justify-content:space-between; font-size:0.85rem; padding:6px 0; border-bottom:1px solid var(--color-line);}
+  .alert-item:last-child{border-bottom:none;}
+  .alert-item .flag-high, .alert-item .flag-low{color:var(--color-red); font-weight:700; font-family:var(--font-mono);}
+
+  /* ---------- Cycle entry form ---------- */
+  .cycle-form-panel{border:1px solid var(--color-line); border-radius:var(--radius); background:var(--color-surface); box-shadow:var(--shadow); overflow:hidden; margin-bottom:24px;}
+  .cycle-form-panel__head{display:flex; align-items:center; justify-content:space-between; background:var(--color-primary-tint); padding:12px 16px; border-bottom:1px solid var(--color-line); flex-wrap:wrap; gap:10px;}
+  .cycle-form-panel__head h2{font-size:1.05rem; color:var(--color-primary-dark);}
+  .cycle-num-select{display:flex; align-items:center; gap:8px;}
+  .cycle-num-select select{border:1px solid var(--color-line); border-radius:6px; padding:6px 9px; font-weight:600;}
+  .status-pill{font-size:0.72rem; padding:3px 9px; border-radius:20px; font-weight:600; background:var(--color-line); color:var(--color-muted); white-space:nowrap;}
+  .status-pill.complete{background:#DCEEE7; color:#2E7D5B;}
+  .status-pill.partial{background:var(--color-amber-tint); color:var(--color-amber);}
+
+  .phase{padding:14px 16px; border-bottom:1px dashed var(--color-line);}
+  .phase:last-of-type{border-bottom:none;}
+  .phase h3{font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-muted); font-family:var(--font-body); font-weight:700; margin-bottom:10px;}
+  .phase h3 .eyebrow-num{display:inline-block; width:16px; height:16px; line-height:16px; text-align:center; background:var(--color-primary); color:#fff; border-radius:50%; font-size:0.62rem; margin-right:6px; font-weight:700;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;}
+  .field-row.two{grid-template-columns:1fr 1fr;}
+  .field{display:flex; flex-direction:column;}
+  .field label{font-size:0.72rem; color:var(--color-muted); margin-bottom:3px;}
+  .field input, .field select, .field textarea{border:1px solid var(--color-line); border-radius:6px; padding:7px 9px; width:100%; background:#fff;}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--color-accent); outline-offset:1px; border-color:var(--color-accent);}
+  .field textarea{resize:vertical; min-height:50px;}
+  .field .hint{font-size:0.68rem; color:var(--color-muted); margin-top:3px;}
+
+  .derived-row{display:flex; align-items:center; gap:16px; padding:12px 16px; background:var(--color-surface-alt); flex-wrap:wrap;}
+  .derived-item{font-size:0.78rem; color:var(--color-muted);}
+  .derived-item strong{display:block; font-family:var(--font-mono); font-size:0.95rem; color:var(--color-ink);}
+
+  .balance-gauge{flex:1; min-width:160px;}
+  .balance-gauge .bar-track{position:relative; height:8px; border-radius:4px; background:var(--color-line); overflow:hidden;}
+  .balance-gauge .bar-fill{position:absolute; top:0; bottom:0; transition:width .25s ease;}
+  .balance-gauge .bar-fill.out{background:var(--color-accent); left:50%;}
+  .balance-gauge .bar-fill.in{background:var(--color-amber); right:50%;}
+  .balance-gauge .center-tick{position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--color-muted);}
+  .balance-label{font-size:0.72rem; margin-top:4px; color:var(--color-muted);}
+  .balance-label strong{font-family:var(--font-mono); color:var(--color-ink);}
+
+  .cycle-form-actions{padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
+  .cycle-form-actions .hint{font-size:0.78rem; color:var(--color-muted);}
+
+  /* ---------- Monitoring table ---------- */
+  .section-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;}
+  .section-title p.hint{font-size:0.8rem; color:var(--color-muted); margin:0;}
+
+  table.data-table{width:100%; border-collapse:collapse; font-size:0.85rem;}
+  table.data-table th, table.data-table td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--color-line);}
+  table.data-table th{color:var(--color-muted); font-weight:600; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em;}
+  table.data-table tbody tr:hover{background:var(--color-surface-alt);}
+  td.num{font-family:var(--font-mono);}
+  td.flag-high, td.flag-low{color:var(--color-red); font-weight:700;}
+  .row-actions{display:flex; gap:6px;}
+  .row-actions button{padding:4px 9px; font-size:0.75rem;}
+  .table-wrap{overflow-x:auto;}
+
+  /* ---------- Buttons ---------- */
+  button.btn{border:none; border-radius:7px; padding:9px 16px; font-size:0.88rem; font-weight:600; cursor:pointer; transition:background .15s ease, transform .05s ease;}
+  button.btn:active{transform:translateY(1px);}
+  button.btn-primary{background:var(--color-primary); color:#fff;}
+  button.btn-primary:hover{background:var(--color-primary-dark);}
+  button.btn-ghost{background:transparent; color:var(--color-primary); border:1px solid var(--color-line);}
+  button.btn-ghost:hover{background:var(--color-primary-tint);}
+  button.btn-danger{background:transparent; color:var(--color-red); border:1px solid var(--color-red-tint);}
+  button.btn-danger:hover{background:var(--color-red-tint);}
+  button:focus-visible{outline:2px solid var(--color-primary-dark); outline-offset:2px;}
+
+  /* ---------- Lab section ---------- */
+  .lab-groups{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-bottom:18px;}
+  .lab-group{border:1px solid var(--color-line); border-radius:var(--radius); background:var(--color-surface); box-shadow:var(--shadow); padding:14px 16px;}
+  .lab-group h3{font-size:0.82rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--color-primary-dark); margin-bottom:10px;}
+  .lab-field{display:grid; grid-template-columns:1fr 100px; align-items:center; gap:8px; margin-bottom:9px;}
+  .lab-field label{font-size:0.85rem;}
+  .lab-field .ref{display:block; font-size:0.68rem; color:var(--color-muted); font-family:var(--font-mono);}
+  .lab-field input{border:1px solid var(--color-line); border-radius:6px; padding:6px 8px; width:100%; text-align:right;}
+  .lab-field input.flag-high, .lab-field input.flag-low{border-color:var(--color-red); background:var(--color-red-tint);}
+  .flag-note{font-size:0.68rem; color:var(--color-red); text-align:right; margin-top:-6px; margin-bottom:6px; display:none;}
+  .flag-note.show{display:block;}
+
+  .empty-state{text-align:center; padding:40px 20px; color:var(--color-muted);}
+  .empty-state h3{color:var(--color-ink); margin-bottom:6px;}
+
+  /* history */
+  .history-layout{display:grid; grid-template-columns:220px 1fr; gap:18px;}
+  @media (max-width:720px){.history-layout{grid-template-columns:1fr;}}
+  .history-dates{border:1px solid var(--color-line); border-radius:var(--radius); background:var(--color-surface); box-shadow:var(--shadow); max-height:520px; overflow:auto;}
+  .history-dates button{display:block; width:100%; text-align:left; padding:10px 14px; background:none; border:none; border-bottom:1px solid var(--color-line); cursor:pointer; font-size:0.88rem;}
+  .history-dates button:hover{background:var(--color-surface-alt);}
+  .history-dates button.active{background:var(--color-primary-tint); font-weight:700; color:var(--color-primary-dark);}
+  .history-detail{border:1px solid var(--color-line); border-radius:var(--radius); background:var(--color-surface); box-shadow:var(--shadow); padding:16px;}
+
+  footer.note{max-width:1140px; margin:0 auto; padding:0 clamp(14px,4vw,32px) 40px; font-size:0.75rem; color:var(--color-muted);}
+  ::selection{background:var(--color-primary-tint);}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+  @media (max-width:560px){
+    .field-row, .field-row.two{grid-template-columns:1fr 1fr;}
+    .lab-field{grid-template-columns:1fr 80px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="title-row">
+    <h1>PD Chart</h1>
+    <span class="subtitle">Peritoneal dialysis cycle &amp; lab tracker — stored on this device only</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="active" data-view="dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button data-view="cycle" role="tab" aria-selected="false">Today's Cycle</button>
+    <button data-view="labs" role="tab" aria-selected="false">Lab Results</button>
+    <button data-view="history" role="tab" aria-selected="false">History</button>
+    <button data-view="data-manager" role="tab" aria-selected="false">Data Manager</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ===================== DASHBOARD VIEW ===================== -->
+  <section id="view-dashboard" class="view active">
+    <div class="stat-grid" id="dash-stats"></div>
+
+    <div class="quick-actions">
+      <button class="btn btn-primary" id="dash-go-cycle">Record a cycle</button>
+      <button class="btn btn-ghost" id="dash-go-labs">Enter lab results</button>
+      <button class="btn btn-ghost" id="dash-go-history">View history</button>
+      <button class="btn btn-ghost" id="dash-print-btn" style="margin-left:auto;">Print/Save as PDF</button>
+    </div>
+
+    <div class="dash-columns">
+      <div class="dash-panel">
+        <h2>Today's cycles at a glance</h2>
+        <div id="dash-cycle-list"></div>
+      </div>
+      <div class="dash-panel">
+        <h2>Latest lab flags</h2>
+        <div id="dash-lab-alerts"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TODAY'S CYCLE VIEW (single form) ===================== -->
+  <section id="view-cycle" class="view">
+    <div class="toolbar">
+      <div class="field-inline">
+        <label for="cycle-date">Date</label>
+        <input type="date" id="cycle-date">
+      </div>
+      <div class="day-summary" id="day-summary"></div>
+    </div>
+
+    <div class="cycle-form-panel">
+      <div class="cycle-form-panel__head">
+        <h2>Cycle entry</h2>
+        <div class="cycle-num-select">
+          <label for="cycle-number-select" style="margin:0; font-size:0.82rem; color:var(--color-primary-dark);">Cycle</label>
+          <select id="cycle-number-select">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+          <span class="status-pill" id="cycle-form-status">Not started</span>
+        </div>
+      </div>
+
+      <div class="phase" data-phase="drain">
+        <h3><span class="eyebrow-num">1</span>Drain Phase</h3>
+        <div class="field-row">
+          <div class="field"><label>Time started</label><input type="time" data-field="start"></div>
+          <div class="field"><label>Time finished</label><input type="time" data-field="end"></div>
+          <div class="field"><label>Volume drained (mL)</label><input type="number" min="0" step="1" data-field="volumeOut" placeholder="e.g. 2200"></div>
+        </div>
+        <div class="field-row two">
+          <div class="field"><label>Fluid appearance</label>
+            <select data-field="appearance">
+              <option value="">Select...</option>
+              <option>Clear</option><option>Pale yellow</option><option>Cloudy</option>
+              <option>Blood-tinged</option><option>Bloody</option><option>Fibrin strands</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase" data-phase="flush">
+        <h3><span class="eyebrow-num">2</span>Flush Phase</h3>
+        <div class="field-row">
+          <div class="field"><label>Time started</label><input type="time" data-field="start"></div>
+          <div class="field"><label>Time finished</label><input type="time" data-field="end"></div>
+          <div class="field"><label>Volume used (mL)</label><input type="number" min="0" step="1" data-field="volumeFlush" placeholder="e.g. 100"></div>
+        </div>
+      </div>
+
+      <div class="phase" data-phase="dwell">
+        <h3><span class="eyebrow-num">3</span>Dwell Phase</h3>
+        <div class="field-row">
+          <div class="field"><label>Time started (fill)</label><input type="time" data-field="start"></div>
+          <div class="field"><label>Time finished</label><input type="time" data-field="end"></div>
+          <div class="field"><label>Volume in (mL)</label><input type="number" min="0" step="1" data-field="volumeIn" placeholder="e.g. 2000"></div>
+        </div>
+        <div class="field-row two">
+          <div class="field"><label>Dialysate concentration</label>
+            <select data-field="concentration">
+              <option value="">Select...</option>
+              <option>1.5%</option><option>2.5%</option><option>4.25%</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="cycle-derived-row"></div>
+
+      <div class="phase" style="border-bottom:none;">
+        <h3><span class="eyebrow-num">4</span>Notes / Observations</h3>
+        <textarea id="cycle-notes" placeholder="e.g. patient tolerated exchange well, mild abdominal discomfort..."></textarea>
+      </div>
+
+      <div class="cycle-form-actions">
+        <span class="hint" id="cycle-form-hint">Fill in the phases above, then save to add this cycle to today's monitoring table.</span>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost" id="btn-clear-cycle-form">Clear form</button>
+          <button class="btn btn-primary" id="btn-save-cycle">Save cycle</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <div>
+        <h2 style="font-size:1.1rem;">Today's Monitoring Table</h2>
+        <p class="hint">Every cycle you save appears here so you can track the full day at a glance.</p>
+      </div>
+    </div>
+    <div class="panel table-wrap" style="padding:6px 16px;">
+      <div id="monitoring-table-wrap"></div>
+    </div>
+  </section>
+
+  <!-- ===================== LABS VIEW ===================== -->
+  <section id="view-labs" class="view">
+    <div class="section-title">
+      <div>
+        <h2>Laboratory Results</h2>
+        <p class="hint">Reference ranges shown are general adult values — use the ranges provided by your lab or clinician when in doubt.</p>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:16px 16px 4px; margin-bottom:18px;">
+      <div class="field-row two" style="max-width:260px; margin-bottom:14px;">
+        <div class="field">
+          <label for="lab-date">Date of test</label>
+          <input type="date" id="lab-date">
+        </div>
+      </div>
+
+      <div class="lab-groups" id="lab-groups"></div>
+
+      <div style="padding:0 0 16px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-ghost" id="btn-clear-lab-form">Clear form</button>
+        <button class="btn btn-primary" id="btn-save-lab">Save lab results</button>
+      </div>
+    </div>
+
+    <div class="section-title"><h2 style="font-size:1.1rem;">Past Results</h2></div>
+    <div class="panel table-wrap" style="padding:6px 16px;">
+      <div id="lab-history-wrap"></div>
+    </div>
+  </section>
+
+  <!-- ===================== HISTORY VIEW ===================== -->
+  <section id="view-history" class="view">
+    <div class="section-title"><h2>History</h2></div>
+    <div class="history-layout">
+      <div class="history-dates" id="history-dates"></div>
+      <div class="history-detail" id="history-detail">
+        <div class="empty-state"><h3>Select a date</h3><p>Choose a date on the left to view its cycle records and lab results.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DATA MANAGER VIEW ===================== -->
+  <section id="view-data-manager" class="view">
+    <h2 style="margin-bottom:20px;">Data Management & Export</h2>
+    
+    <!-- CYCLES EXPORT SECTION -->
+    <div class="panel" style="margin-bottom:24px; padding:18px;">
+      <h3 style="margin-bottom:16px;">📊 Export Cycle Records</h3>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+        <div class="field">
+          <label for="cycles-from-date">From date:</label>
+          <input type="date" id="cycles-from-date">
+        </div>
+        <div class="field">
+          <label for="cycles-to-date">To date:</label>
+          <input type="date" id="cycles-to-date">
+        </div>
+      </div>
+
+      <div style="background:var(--color-surface-alt); padding:12px; border-radius:6px; margin-bottom:16px; font-size:0.85rem;">
+        <strong style="display:block; margin-bottom:6px;">Preview:</strong>
+        <div id="cycles-preview">Select dates to see data summary...</div>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="cycles-preview-btn">Preview data</button>
+        <button class="btn btn-primary" id="cycles-export-csv-btn">Export as CSV</button>
+        <button class="btn btn-secondary" id="cycles-export-json-btn">Export as JSON</button>
+      </div>
+    </div>
+
+    <!-- LAB RESULTS EXPORT SECTION -->
+    <div class="panel" style="margin-bottom:24px; padding:18px;">
+      <h3 style="margin-bottom:16px;">🔬 Export Lab Results</h3>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+        <div class="field">
+          <label for="labs-from-date">From date:</label>
+          <input type="date" id="labs-from-date">
+        </div>
+        <div class="field">
+          <label for="labs-to-date">To date:</label>
+          <input type="date" id="labs-to-date">
+        </div>
+      </div>
+
+      <div style="background:var(--color-surface-alt); padding:12px; border-radius:6px; margin-bottom:16px; font-size:0.85rem;">
+        <strong style="display:block; margin-bottom:6px;">Preview:</strong>
+        <div id="labs-preview">Select dates to see results...</div>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="labs-preview-btn">Preview data</button>
+        <button class="btn btn-primary" id="labs-export-csv-btn">Export as CSV</button>
+        <button class="btn btn-secondary" id="labs-export-json-btn">Export as JSON</button>
+      </div>
+    </div>
+
+    <!-- COMBINED BACKUP SECTION -->
+    <div class="panel" style="margin-bottom:24px; padding:18px; border:2px solid var(--color-primary-tint);">
+      <h3 style="margin-bottom:16px;">💾 Full Data Backup</h3>
+      <p style="color:var(--color-muted); margin-bottom:16px; font-size:0.9rem;">
+        Create a complete backup of all cycles and lab results. Perfect for data recovery or switching devices.
+      </p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="full-backup-btn">Create Full Backup (JSON)</button>
+      </div>
+    </div>
+
+    <!-- IMPORT SECTION -->
+    <div class="panel" style="padding:18px; background:var(--color-accent-tint); border:1px solid var(--color-accent);">
+      <h3 style="margin-bottom:16px;">📥 Import Data</h3>
+      <p style="color:var(--color-muted); margin-bottom:16px; font-size:0.9rem;">
+        Restore data from a previously saved backup file. <strong>Note:</strong> Imported data will be merged with existing records.
+      </p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="import-backup-btn">Choose backup file...</button>
+        <span style="align-self:center; color:var(--color-muted); font-size:0.85rem;" id="import-file-name">No file selected</span>
+      </div>
+      <input type="file" id="import-backup-file" accept=".json" style="display:none;">
+    </div>
+  </section>
+
+</main>
+
+<footer class="note">All data is saved only in this browser's local storage on this device. Clearing browser data will erase records — export or back up important values separately if needed.</footer>
+
+<script>
+
+(function(){
+  "use strict";
+
+  /* ============================================================
+     CONSTANTS
+     ============================================================ */
+  var DB_NAME = 'PDTrackerDB';
+  var DB_VERSION = 1;
+  var STORE_RECORDS = 'dailyRecords';
+  var STORE_LABS = 'labResults';
+
+  var LEGACY_LS_RECORDS = 'pd_daily_records_v2';
+  var LEGACY_LS_LABS = 'pd_lab_results_v1';
+
+  var LAB_FIELDS = [
+    {group:'Blood Chemistry', key:'creatinine', label:'Creatinine', unit:'mg/dL', low:0.6, high:1.3},
+    {group:'Blood Chemistry', key:'bun', label:'BUN', unit:'mg/dL', low:7, high:20},
+    {group:'Blood Chemistry', key:'sodium', label:'Sodium', unit:'mmol/L', low:135, high:145},
+    {group:'Blood Chemistry', key:'potassium', label:'Potassium', unit:'mmol/L', low:3.5, high:5.0},
+    {group:'Blood Chemistry', key:'bicarbonate', label:'Bicarbonate', unit:'mmol/L', low:22, high:29},
+    {group:'Blood Chemistry', key:'glucose', label:'Glucose', unit:'mg/dL', low:70, high:99},
+    {group:'CBC', key:'hemoglobin', label:'Hemoglobin', unit:'g/dL', low:12, high:17},
+    {group:'CBC', key:'hematocrit', label:'Hematocrit', unit:'%', low:36, high:50},
+    {group:'CBC', key:'wbc', label:'White Blood Cells', unit:'x10\u00b3/\u00b5L', low:4.5, high:11.0},
+    {group:'Other', key:'albumin', label:'Albumin', unit:'g/dL', low:3.5, high:5.0},
+    {group:'Other', key:'calcium', label:'Calcium', unit:'mg/dL', low:8.5, high:10.2},
+    {group:'Other', key:'phosphorus', label:'Phosphorus', unit:'mg/dL', low:2.5, high:4.5}
+  ];
+
+  /* ============================================================
+     INDEXEDDB LAYER
+     ============================================================ */
+  var dbReady = null;
+
+  function openDB(){
+    return new Promise(function(resolve, reject){
+      if(!window.indexedDB){ reject(new Error('IndexedDB not supported in this browser')); return; }
+      var req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = function(e){
+        var db = e.target.result;
+        if(!db.objectStoreNames.contains(STORE_RECORDS)){
+          db.createObjectStore(STORE_RECORDS, {keyPath:'date'});
+        }
+        if(!db.objectStoreNames.contains(STORE_LABS)){
+          db.createObjectStore(STORE_LABS, {keyPath:'date'});
+        }
+      };
+      req.onsuccess = function(e){ resolve(e.target.result); };
+      req.onerror = function(e){ reject(e.target.error || new Error('Failed to open database')); };
+    });
+  }
+
+  function getDB(){
+    if(!dbReady) dbReady = openDB();
+    return dbReady;
+  }
+
+  function tx(storeName, mode, fn){
+    return getDB().then(function(db){
+      return new Promise(function(resolve, reject){
+        var t = db.transaction(storeName, mode);
+        var store = t.objectStore(storeName);
+        var result;
+        fn(store, function(r){ result = r; });
+        t.oncomplete = function(){ resolve(result); };
+        t.onerror = function(){ reject(t.error); };
+        t.onabort = function(){ reject(t.error); };
+      });
+    });
+  }
+
+  function dbGetRecord(date){
+    return tx(STORE_RECORDS, 'readonly', function(store, setResult){
+      var req = store.get(date);
+      req.onsuccess = function(){ setResult(req.result || null); };
+    });
+  }
+  function dbGetAllRecordsMap(){
+    return tx(STORE_RECORDS, 'readonly', function(store, setResult){
+      var req = store.getAll();
+      req.onsuccess = function(){
+        var map = {};
+        (req.result||[]).forEach(function(d){ map[d.date] = d; });
+        setResult(map);
+      };
+    });
+  }
+  function dbPutRecord(dayObj){
+    return tx(STORE_RECORDS, 'readwrite', function(store){ store.put(dayObj); });
+  }
+  function dbDeleteRecord(date){
+    return tx(STORE_RECORDS, 'readwrite', function(store){ store.delete(date); });
+  }
+
+  function dbGetLab(date){
+    return tx(STORE_LABS, 'readonly', function(store, setResult){
+      var req = store.get(date);
+      req.onsuccess = function(){ setResult(req.result || null); };
+    });
+  }
+  function dbGetAllLabs(){
+    return tx(STORE_LABS, 'readonly', function(store, setResult){
+      var req = store.getAll();
+      req.onsuccess = function(){
+        var arr = (req.result||[]).slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+        setResult(arr);
+      };
+    });
+  }
+  function dbPutLab(entry){
+    return tx(STORE_LABS, 'readwrite', function(store){ store.put(entry); });
+  }
+  function dbDeleteLab(date){
+    return tx(STORE_LABS, 'readwrite', function(store){ store.delete(date); });
+  }
+
+  // one-time import of any data saved by the older localStorage-based version
+  function migrateFromLocalStorage(){
+    return Promise.all([dbGetAllRecordsMap(), dbGetAllLabs()]).then(function(res){
+      var existingRecords = res[0], existingLabs = res[1];
+      var tasks = [];
+      if(Object.keys(existingRecords).length === 0){
+        try{
+          var oldRecords = JSON.parse(localStorage.getItem(LEGACY_LS_RECORDS) || 'null');
+          if(oldRecords){
+            Object.keys(oldRecords).forEach(function(date){ tasks.push(dbPutRecord(oldRecords[date])); });
+          }
+        }catch(e){}
+      }
+      if(existingLabs.length === 0){
+        try{
+          var oldLabs = JSON.parse(localStorage.getItem(LEGACY_LS_LABS) || 'null');
+          if(oldLabs && oldLabs.length){
+            oldLabs.forEach(function(entry){ tasks.push(dbPutLab(entry)); });
+          }
+        }catch(e){}
+      }
+      return Promise.all(tasks);
+    });
+  }
+
+  /* ============================================================
+     DATA HELPERS
+     ============================================================ */
+  function blankCycle(n){
+    return {
+      cycleNumber:n, saved:false,
+      drain:{start:'', end:'', volumeOut:'', appearance:''},
+      flush:{start:'', end:'', volumeFlush:''},
+      dwell:{start:'', end:'', concentration:'', volumeIn:''},
+      notes:''
+    };
+  }
+  function blankDay(date){
+    var cycles=[];
+    for(var i=1;i<=4;i++) cycles.push(blankCycle(i));
+    return {date:date, cycles:cycles};
+  }
+  function getDay(date){
+    return dbGetRecord(date).then(function(rec){ return rec || blankDay(date); });
+  }
+  function todayStr(){
+    var d=new Date();
+    var m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2);
+    return d.getFullYear()+'-'+m+'-'+day;
+  }
+
+  /* ============================================================
+     TIME / CALC HELPERS
+     ============================================================ */
+  function timeToMinutes(t){
+    if(!t) return null;
+    var parts=t.split(':');
+    if(parts.length<2) return null;
+    return (parseInt(parts[0],10)*60)+parseInt(parts[1],10);
+  }
+  function durationLabel(startT,endT){
+    var s=timeToMinutes(startT), e=timeToMinutes(endT);
+    if(s===null||e===null) return '—';
+    var diff=e-s;
+    if(diff<0) diff+=24*60;
+    var h=Math.floor(diff/60), m=diff%60;
+    return h+'h '+('0'+m).slice(-2)+'m';
+  }
+  function num(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function flashButton(btn, text){
+    var original=btn.textContent;
+    btn.textContent=text;
+    setTimeout(function(){ btn.textContent=original; }, 1200);
+  }
+  function cycleCompleteness(cycle){
+    var fields=[cycle.drain.start,cycle.drain.end,cycle.drain.volumeOut,
+                cycle.flush.start,cycle.flush.end,cycle.flush.volumeFlush,
+                cycle.dwell.start,cycle.dwell.end,cycle.dwell.concentration,cycle.dwell.volumeIn];
+    var filled=fields.filter(function(v){return v!==''&&v!==undefined&&v!==null;}).length;
+    if(filled===0) return 0;
+    if(filled===fields.length) return 2;
+    return 1;
+  }
+  function cycleBalance(cycle){
+    var vOut=num(cycle.drain.volumeOut), vIn=num(cycle.dwell.volumeIn);
+    return (vOut!==null && vIn!==null) ? (vOut-vIn) : null;
+  }
+
+  /* ============================================================
+     ERROR BANNER (shown if IndexedDB can't be opened at all)
+     ============================================================ */
+  function showDbErrorBanner(err){
+    var el = document.createElement('div');
+    el.style.cssText='max-width:1140px;margin:14px auto 0;padding:12px 16px;background:#F8E4E0;border:1px solid #B14636;color:#7a2d20;border-radius:8px;font-size:0.85rem;';
+    el.textContent='This browser could not open its local database (' + (err && err.message ? err.message : 'unknown error') + '). Saving may not work — try a different browser, or turn off private/incognito mode.';
+    document.querySelector('main').prepend(el);
+  }
+
+  /* ============================================================
+     TAB NAVIGATION
+     ============================================================ */
+  function switchView(name){
+    document.querySelectorAll('nav.tabs button').forEach(function(b){
+      var active=b.dataset.view===name;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', active?'true':'false');
+    });
+    document.querySelectorAll('.view').forEach(function(v){
+      v.classList.toggle('active', v.id==='view-'+name);
+    });
+    if(name==='history') renderHistoryList();
+    if(name==='dashboard') renderDashboard();
+    if(name==='cycle'){ refreshMonitoringTable(); refreshDaySummary(); }
+  }
+  document.querySelectorAll('nav.tabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchView(btn.dataset.view); });
+  });
+
+  /* ============================================================
+     TODAY'S CYCLE — single form + monitoring table
+     ============================================================ */
+  var cycleDateInput=document.getElementById('cycle-date');
+  var cycleNumberSelect=document.getElementById('cycle-number-select');
+  var daySummaryEl=document.getElementById('day-summary');
+  var derivedRowEl=document.getElementById('cycle-derived-row');
+  var formStatusPill=document.getElementById('cycle-form-status');
+  var formHint=document.getElementById('cycle-form-hint');
+
+  var phaseFieldsMap={
+    drain:['start','end','volumeOut','appearance'],
+    flush:['start','end','volumeFlush'],
+    dwell:['start','end','volumeIn','concentration']
+  };
+
+  function fieldEl(phase, field){
+    return document.querySelector('.phase[data-phase="'+phase+'"] [data-field="'+field+'"]');
+  }
+
+  function readFormCycle(){
+    var n=parseInt(cycleNumberSelect.value,10);
+    var c=blankCycle(n);
+    Object.keys(phaseFieldsMap).forEach(function(phase){
+      phaseFieldsMap[phase].forEach(function(f){
+        c[phase][f]=fieldEl(phase,f).value;
+      });
+    });
+    c.notes=document.getElementById('cycle-notes').value;
+    return c;
+  }
+
+  function writeFormCycle(cycle){
+    Object.keys(phaseFieldsMap).forEach(function(phase){
+      phaseFieldsMap[phase].forEach(function(f){
+        fieldEl(phase,f).value=cycle[phase][f]||'';
+      });
+    });
+    document.getElementById('cycle-notes').value=cycle.notes||'';
+  }
+
+  function nextUnsavedCycleNumber(day){
+    for(var i=0;i<4;i++){ if(!day.cycles[i].saved) return day.cycles[i].cycleNumber; }
+    return 1;
+  }
+
+  function loadCycleIntoForm(cycleNumber){
+    var date=cycleDateInput.value;
+    return getDay(date).then(function(day){
+      var cycle=day.cycles[cycleNumber-1];
+      cycleNumberSelect.value=String(cycleNumber);
+
+      if(!cycle.saved){
+        return dbGetAllRecordsMap().then(function(records){
+          var priorDates=Object.keys(records).filter(function(d){return d<date;}).sort();
+          if(priorDates.length>0){
+            var priorCycle=records[priorDates[priorDates.length-1]].cycles[cycleNumber-1];
+            if(priorCycle && priorCycle.saved){
+              if(!cycle.dwell.concentration) cycle.dwell.concentration=priorCycle.dwell.concentration;
+              if(!cycle.dwell.volumeIn) cycle.dwell.volumeIn=priorCycle.dwell.volumeIn;
+              if(!cycle.flush.volumeFlush) cycle.flush.volumeFlush=priorCycle.flush.volumeFlush;
+            }
+          }
+          writeFormCycle(cycle);
+          refreshDerived();
+          return refreshFormStatus();
+        });
+      }
+      writeFormCycle(cycle);
+      refreshDerived();
+      return refreshFormStatus();
+    });
+  }
+
+  function refreshDerived(){
+    var cycle=readFormCycle();
+    var dwellDur=durationLabel(cycle.dwell.start, cycle.dwell.end);
+    var balance=cycleBalance(cycle);
+    var gaugeHtml='';
+    if(balance!==null){
+      var maxScale=1500;
+      var pct=Math.min(Math.abs(balance)/maxScale*50, 50);
+      var isOut=balance>=0;
+      gaugeHtml =
+        '<div class="balance-gauge">' +
+          '<div class="bar-track"><div class="center-tick"></div><div class="bar-fill '+(isOut?'out':'in')+'" style="width:'+pct+'%;"></div></div>' +
+          '<div class="balance-label">'+(isOut?'Net fluid removed: ':'Net fluid retained: ')+'<strong>'+(isOut?'+':'')+balance+' mL</strong></div>' +
+        '</div>';
+    } else {
+      gaugeHtml='<div class="balance-gauge"><div class="bar-track"><div class="center-tick"></div></div><div class="balance-label">Net fluid balance: <strong>— enter volumes —</strong></div></div>';
+    }
+    derivedRowEl.innerHTML='<div class="derived-row"><div class="derived-item">Dwell duration<strong>'+dwellDur+'</strong></div>'+gaugeHtml+'</div>';
+  }
+
+  function refreshFormStatus(){
+    var cycle=readFormCycle();
+    return getDay(cycleDateInput.value).then(function(day){
+      var savedFlag=day.cycles[cycle.cycleNumber-1].saved;
+      var completeness=cycleCompleteness(cycle);
+      var text, cls;
+      if(savedFlag){ text='Saved'; cls='complete'; }
+      else if(completeness===2){ text='Ready to save'; cls='partial'; }
+      else if(completeness===1){ text='In progress'; cls='partial'; }
+      else { text='Not started'; cls=''; }
+      formStatusPill.className='status-pill '+cls;
+      formStatusPill.textContent=text;
+    });
+  }
+
+  document.querySelectorAll('#view-cycle [data-field]').forEach(function(el){
+    el.addEventListener('input', function(){ refreshDerived(); refreshFormStatus(); });
+  });
+  document.getElementById('cycle-notes').addEventListener('input', function(){ refreshFormStatus(); });
+
+  cycleNumberSelect.addEventListener('change', function(){
+    loadCycleIntoForm(parseInt(cycleNumberSelect.value,10));
+  });
+
+  cycleDateInput.addEventListener('change', function(){
+    getDay(cycleDateInput.value).then(function(day){
+      return loadCycleIntoForm(nextUnsavedCycleNumber(day));
+    }).then(function(){
+      refreshMonitoringTable();
+      refreshDaySummary();
+    });
+  });
+
+  document.getElementById('btn-save-cycle').addEventListener('click', function(){
+    var date=cycleDateInput.value;
+    if(!date){ alert('Please choose a date first.'); return; }
+    var cycle=readFormCycle();
+    var completeness=cycleCompleteness(cycle);
+    if(completeness===0){ alert('Enter at least the drain, flush, and dwell details before saving.'); return; }
+    cycle.saved=true;
+
+    var saveBtn=document.getElementById('btn-save-cycle');
+    getDay(date).then(function(day){
+      day.cycles[cycle.cycleNumber-1]=cycle;
+      return dbPutRecord(day).then(function(){ return day; });
+    }).then(function(day){
+      refreshMonitoringTable();
+      refreshDaySummary();
+      refreshFormStatus();
+      flashButton(saveBtn, 'Saved ✓');
+
+      var nextNum=nextUnsavedCycleNumber(day);
+      if(nextNum!==cycle.cycleNumber || day.cycles.every(function(c){return c.saved;})){
+        setTimeout(function(){ loadCycleIntoForm(nextNum); }, 350);
+      }
+    }).catch(function(err){
+      alert('Could not save this cycle: ' + (err && err.message ? err.message : 'unknown error'));
+    });
+  });
+
+  document.getElementById('btn-clear-cycle-form').addEventListener('click', function(){
+    if(!confirm('Clear the fields currently in this form? This does not remove anything already saved.')) return;
+    var n=parseInt(cycleNumberSelect.value,10);
+    writeFormCycle(blankCycle(n));
+    refreshDerived();
+    refreshFormStatus();
+  });
+
+  function refreshDaySummary(){
+    return getDay(cycleDateInput.value).then(function(day){
+      var savedCycles=day.cycles.filter(function(c){return c.saved;});
+      if(savedCycles.length===0){
+        daySummaryEl.innerHTML='No cycles saved yet for this date';
+        return;
+      }
+      var totalOut=0, totalIn=0;
+      savedCycles.forEach(function(c){
+        var vOut=num(c.drain.volumeOut), vIn=num(c.dwell.volumeIn);
+        if(vOut!==null) totalOut+=vOut;
+        if(vIn!==null) totalIn+=vIn;
+      });
+      var net=totalOut-totalIn;
+      daySummaryEl.innerHTML=savedCycles.length+' of 4 cycles saved &mdash; Out: <strong>'+totalOut+' mL</strong> &nbsp;In: <strong>'+totalIn+' mL</strong> &nbsp;Net: <strong>'+(net>=0?'+':'')+net+' mL</strong>';
+    });
+  }
+
+  function refreshMonitoringTable(){
+    var date=cycleDateInput.value;
+    return getDay(date).then(function(day){
+      var wrap=document.getElementById('monitoring-table-wrap');
+      var savedCycles=day.cycles.filter(function(c){return c.saved;});
+      if(savedCycles.length===0){
+        wrap.innerHTML='<div class="empty-state"><h3>No cycles saved yet</h3><p>Save your first cycle above and it will appear here.</p></div>';
+        return;
+      }
+      var html='<table class="data-table"><thead><tr>' +
+        '<th>Cycle</th><th>Drain time</th><th>Vol. out (mL)</th><th>Appearance</th><th>Flush (mL)</th>' +
+        '<th>Dwell conc.</th><th>Vol. in (mL)</th><th>Dwell time</th><th>Net balance</th><th></th>' +
+        '</tr></thead><tbody>';
+      savedCycles.forEach(function(c){
+        var balance=cycleBalance(c);
+        html+='<tr>' +
+          '<td>'+c.cycleNumber+'</td>' +
+          '<td>'+(c.drain.start||'—')+' \u2013 '+(c.drain.end||'—')+'</td>' +
+          '<td class="num">'+(c.drain.volumeOut||'—')+'</td>' +
+          '<td>'+(c.drain.appearance||'—')+'</td>' +
+          '<td class="num">'+(c.flush.volumeFlush||'—')+'</td>' +
+          '<td>'+(c.dwell.concentration||'—')+'</td>' +
+          '<td class="num">'+(c.dwell.volumeIn||'—')+'</td>' +
+          '<td>'+durationLabel(c.dwell.start,c.dwell.end)+'</td>' +
+          '<td class="num">'+(balance!==null?((balance>=0?'+':'')+balance+' mL'):'—')+'</td>' +
+          '<td class="row-actions">' +
+            '<button class="btn btn-ghost" data-edit="'+c.cycleNumber+'">Edit</button>' +
+            '<button class="btn btn-danger" data-del="'+c.cycleNumber+'">Delete</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html+='</tbody></table>';
+      wrap.innerHTML=html;
+
+      wrap.querySelectorAll('[data-edit]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          loadCycleIntoForm(parseInt(btn.dataset.edit,10));
+          window.scrollTo({top:0,behavior:'smooth'});
+        });
+      });
+      wrap.querySelectorAll('[data-del]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var cn=parseInt(btn.dataset.del,10);
+          if(!confirm('Delete the saved data for Cycle '+cn+'?')) return;
+          getDay(date).then(function(d){
+            d.cycles[cn-1]=blankCycle(cn);
+            return dbPutRecord(d);
+          }).then(function(){
+            refreshMonitoringTable();
+            refreshDaySummary();
+            if(parseInt(cycleNumberSelect.value,10)===cn) loadCycleIntoForm(cn);
+          });
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     LABS VIEW
+     ============================================================ */
+  var labDateInput=document.getElementById('lab-date');
+  var labGroupsEl=document.getElementById('lab-groups');
+
+  function renderLabForm(){
+    var groups={};
+    LAB_FIELDS.forEach(function(f){ groups[f.group]=groups[f.group]||[]; groups[f.group].push(f); });
+    var html='';
+    Object.keys(groups).forEach(function(g){
+      html+='<div class="lab-group"><h3>'+g+'</h3>';
+      groups[g].forEach(function(f){
+        html+='<div class="lab-field">' +
+          '<label for="lab-'+f.key+'">'+f.label+'<span class="ref">'+f.low+'\u2013'+f.high+' '+f.unit+'</span></label>' +
+          '<input type="number" step="0.01" id="lab-'+f.key+'" data-key="'+f.key+'">' +
+        '</div>' +
+        '<div class="flag-note" id="flag-'+f.key+'"></div>';
+      });
+      html+='</div>';
+    });
+    labGroupsEl.innerHTML=html;
+    LAB_FIELDS.forEach(function(f){
+      var input=document.getElementById('lab-'+f.key);
+      input.addEventListener('input', function(){ checkFlag(f, input); });
+    });
+  }
+
+  function checkFlag(f, input){
+    var flagNote=document.getElementById('flag-'+f.key);
+    var v=num(input.value);
+    input.classList.remove('flag-high','flag-low');
+    flagNote.classList.remove('show');
+    if(v===null) return;
+    if(v>f.high){ input.classList.add('flag-high'); flagNote.textContent='Above reference range'; flagNote.classList.add('show'); }
+    else if(v<f.low){ input.classList.add('flag-low'); flagNote.textContent='Below reference range'; flagNote.classList.add('show'); }
+  }
+
+  document.getElementById('btn-clear-lab-form').addEventListener('click', function(){
+    LAB_FIELDS.forEach(function(f){
+      var input=document.getElementById('lab-'+f.key);
+      input.value='';
+      input.classList.remove('flag-high','flag-low');
+      document.getElementById('flag-'+f.key).classList.remove('show');
+    });
+  });
+
+  document.getElementById('btn-save-lab').addEventListener('click', function(){
+    var date=labDateInput.value;
+    if(!date){ alert('Please choose the date of the lab test.'); return; }
+    var entry={date:date, values:{}};
+    var any=false;
+    LAB_FIELDS.forEach(function(f){
+      var v=document.getElementById('lab-'+f.key).value;
+      if(v!==''){ entry.values[f.key]=parseFloat(v); any=true; }
+    });
+    if(!any){ alert('Enter at least one lab value before saving.'); return; }
+
+    var saveBtn=document.getElementById('btn-save-lab');
+    dbGetLab(date).then(function(existing){
+      if(existing && !confirm('A lab entry for '+date+' already exists. Overwrite it?')) return null;
+      return dbPutLab(entry);
+    }).then(function(result){
+      if(result===null) return; // user cancelled overwrite
+      renderLabHistory();
+      flashButton(saveBtn, 'Saved ✓');
+    }).catch(function(err){
+      alert('Could not save lab results: ' + (err && err.message ? err.message : 'unknown error'));
+    });
+  });
+
+  function renderLabHistory(){
+    return dbGetAllLabs().then(function(labs){
+      var wrap=document.getElementById('lab-history-wrap');
+      if(labs.length===0){
+        wrap.innerHTML='<div class="empty-state"><h3>No lab results yet</h3><p>Saved lab entries will appear here as a table you can review or reload.</p></div>';
+        return;
+      }
+      var keyFields=['creatinine','bun','sodium','potassium','glucose','hemoglobin','albumin'];
+      var html='<table class="data-table"><thead><tr><th>Date</th>';
+      keyFields.forEach(function(k){
+        var f=LAB_FIELDS.filter(function(x){return x.key===k;})[0];
+        html+='<th>'+f.label+'</th>';
+      });
+      html+='<th></th></tr></thead><tbody>';
+      labs.forEach(function(entry, idx){
+        html+='<tr data-idx="'+idx+'">';
+        html+='<td>'+entry.date+'</td>';
+        keyFields.forEach(function(k){
+          var f=LAB_FIELDS.filter(function(x){return x.key===k;})[0];
+          var v=entry.values[k];
+          var cls='num';
+          if(v!==undefined){ if(v>f.high) cls+=' flag-high'; else if(v<f.low) cls+=' flag-low'; }
+          html+='<td class="'+cls+'">'+(v!==undefined?v:'—')+'</td>';
+        });
+        html+='<td class="row-actions"><button class="btn btn-ghost" data-load="'+idx+'">Open</button><button class="btn btn-danger" data-del="'+idx+'">Delete</button></td>';
+        html+='</tr>';
+      });
+      html+='</tbody></table>';
+      wrap.innerHTML=html;
+
+      wrap.querySelectorAll('[data-load]').forEach(function(btn){
+        btn.addEventListener('click', function(){ loadLabIntoForm(labs[parseInt(btn.dataset.load,10)]); });
+      });
+      wrap.querySelectorAll('[data-del]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var idx=parseInt(btn.dataset.del,10);
+          if(!confirm('Delete lab results from '+labs[idx].date+'?')) return;
+          dbDeleteLab(labs[idx].date).then(function(){ renderLabHistory(); });
+        });
+      });
+    });
+  }
+
+  function loadLabIntoForm(entry){
+    labDateInput.value=entry.date;
+    LAB_FIELDS.forEach(function(f){
+      var input=document.getElementById('lab-'+f.key);
+      var v=entry.values[f.key];
+      input.value=(v!==undefined)?v:'';
+      checkFlag(f, input);
+    });
+    switchView('labs');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  /* ============================================================
+     HISTORY VIEW
+     ============================================================ */
+  function renderHistoryList(){
+    return dbGetAllRecordsMap().then(function(records){
+      var dates=Object.keys(records).filter(function(d){
+        return records[d].cycles.some(function(c){return c.saved;});
+      }).sort().reverse();
+      var wrap=document.getElementById('history-dates');
+      if(dates.length===0){
+        wrap.innerHTML='<div class="empty-state" style="padding:20px 12px;"><p>No saved cycle records yet.</p></div>';
+        return;
+      }
+      wrap.innerHTML=dates.map(function(d){ return '<button data-date="'+d+'">'+d+'</button>'; }).join('');
+      wrap.querySelectorAll('button').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          wrap.querySelectorAll('button').forEach(function(b){b.classList.remove('active');});
+          btn.classList.add('active');
+          renderHistoryDetail(btn.dataset.date);
+        });
+      });
+    });
+  }
+
+  function renderHistoryDetail(date){
+    return Promise.all([dbGetRecord(date), dbGetLab(date)]).then(function(res){
+      var day=res[0], lab=res[1];
+      var detail=document.getElementById('history-detail');
+      if(!day){ detail.innerHTML='<div class="empty-state"><h3>No data</h3></div>'; return; }
+
+      var savedCycles=day.cycles.filter(function(c){return c.saved;});
+      var html='<h2 style="margin-bottom:14px;">'+date+'</h2>';
+      html+='<div class="table-wrap"><table class="data-table" style="margin-bottom:22px;"><thead><tr>' +
+        '<th>Cycle</th><th>Drain (mL)</th><th>Appearance</th><th>Flush (mL)</th><th>Dwell conc.</th><th>Volume in (mL)</th><th>Dwell time</th><th>Net balance</th>' +
+        '</tr></thead><tbody>';
+      savedCycles.forEach(function(c){
+        var balance=cycleBalance(c);
+        html+='<tr>' +
+          '<td>'+c.cycleNumber+'</td>' +
+          '<td class="num">'+(c.drain.volumeOut||'—')+'</td>' +
+          '<td>'+(c.drain.appearance||'—')+'</td>' +
+          '<td class="num">'+(c.flush.volumeFlush||'—')+'</td>' +
+          '<td>'+(c.dwell.concentration||'—')+'</td>' +
+          '<td class="num">'+(c.dwell.volumeIn||'—')+'</td>' +
+          '<td>'+durationLabel(c.dwell.start,c.dwell.end)+'</td>' +
+          '<td class="num">'+(balance!==null?((balance>=0?'+':'')+balance+' mL'):'—')+'</td>' +
+        '</tr>';
+      });
+      html+='</tbody></table></div>';
+
+      var anyNotes=savedCycles.some(function(c){return c.notes;});
+      if(anyNotes){
+        html+='<h3 style="font-size:0.95rem; margin-bottom:8px;">Notes</h3><ul style="margin:0 0 20px; padding-left:18px; font-size:0.88rem;">';
+        savedCycles.forEach(function(c){
+          if(c.notes) html+='<li><strong>Cycle '+c.cycleNumber+':</strong> '+escapeHtml(c.notes)+'</li>';
+        });
+        html+='</ul>';
+      }
+
+      if(lab){
+        html+='<h3 style="font-size:0.95rem; margin-bottom:8px;">Lab Results</h3>';
+        html+='<div class="table-wrap"><table class="data-table" style="margin-bottom:10px;"><thead><tr><th>Test</th><th>Result</th><th>Reference range</th></tr></thead><tbody>';
+        LAB_FIELDS.forEach(function(f){
+          var v=lab.values[f.key];
+          if(v===undefined) return;
+          var cls='num'+(v>f.high?' flag-high':(v<f.low?' flag-low':''));
+          html+='<tr><td>'+f.label+'</td><td class="'+cls+'">'+v+' '+f.unit+'</td><td class="mono">'+f.low+'\u2013'+f.high+'</td></tr>';
+        });
+        html+='</tbody></table></div>';
+      }
+
+      html+='<div style="display:flex; justify-content:flex-end;"><button class="btn btn-danger" id="btn-delete-day">Delete this day\'s records</button></div>';
+      detail.innerHTML=html;
+      document.getElementById('btn-delete-day').addEventListener('click', function(){
+        if(!confirm('Permanently delete all cycle records for '+date+'?')) return;
+        dbDeleteRecord(date).then(function(){
+          renderHistoryList();
+          detail.innerHTML='<div class="empty-state"><h3>Deleted</h3><p>Select another date from the list.</p></div>';
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     DASHBOARD VIEW
+     ============================================================ */
+  function renderDashboard(){
+    var today=todayStr();
+    return Promise.all([getDay(today), dbGetAllLabs()]).then(function(res){
+      var day=res[0], labs=res[1];
+      var savedCycles=day.cycles.filter(function(c){return c.saved;});
+      var totalOut=0, totalIn=0;
+      savedCycles.forEach(function(c){
+        var vOut=num(c.drain.volumeOut), vIn=num(c.dwell.volumeIn);
+        if(vOut!==null) totalOut+=vOut;
+        if(vIn!==null) totalIn+=vIn;
+      });
+      var net=totalOut-totalIn;
+
+      var latestLab=labs.length?labs[0]:null;
+      var flagCount=0;
+      if(latestLab){
+        LAB_FIELDS.forEach(function(f){
+          var v=latestLab.values[f.key];
+          if(v!==undefined && (v>f.high || v<f.low)) flagCount++;
+        });
+      }
+
+      var stats=document.getElementById('dash-stats');
+      stats.innerHTML =
+        '<div class="stat-card '+(savedCycles.length===4?'good':'')+'">' +
+          '<div class="stat-label">Cycles today</div>' +
+          '<div class="stat-value">'+savedCycles.length+' / 4</div>' +
+          '<div class="stat-sub">'+today+'</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">Today\'s net balance</div>' +
+          '<div class="stat-value">'+(savedCycles.length? (net>=0?'+':'')+net+' mL' : '—')+'</div>' +
+          '<div class="stat-sub">'+(savedCycles.length? (net>=0?'Fluid removed':'Fluid retained') : 'No cycles saved yet')+'</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">Latest labs</div>' +
+          '<div class="stat-value" style="font-size:1.1rem;">'+(latestLab?latestLab.date:'—')+'</div>' +
+          '<div class="stat-sub">'+(latestLab?'View in Lab Results':'No lab results saved yet')+'</div>' +
+        '</div>' +
+        '<div class="stat-card '+(flagCount>0?'warn':'')+'">' +
+          '<div class="stat-label">Out-of-range labs</div>' +
+          '<div class="stat-value">'+(latestLab?flagCount:'—')+'</div>' +
+          '<div class="stat-sub">'+(latestLab?'from '+latestLab.date+' results':'—')+'</div>' +
+        '</div>';
+
+      var cycleList=document.getElementById('dash-cycle-list');
+      var rows='';
+      for(var i=1;i<=4;i++){
+        var c=day.cycles[i-1];
+        var bal=c.saved?cycleBalance(c):null;
+        rows += '<div class="mini-cycle-row">' +
+          '<span class="dot '+(c.saved?'saved':'')+'"></span>' +
+          '<span class="label">Cycle '+i+'</span>' +
+          '<span class="val">'+(c.saved ? (bal!==null?((bal>=0?'+':'')+bal+' mL'):'saved') : 'not yet recorded')+'</span>' +
+        '</div>';
+      }
+      cycleList.innerHTML=rows;
+
+      var alertsWrap=document.getElementById('dash-lab-alerts');
+      if(!latestLab){
+        alertsWrap.innerHTML='<div class="empty-state" style="padding:12px 4px;"><p>No lab results recorded yet.</p></div>';
+      } else if(flagCount===0){
+        alertsWrap.innerHTML='<div class="empty-state" style="padding:12px 4px;"><p>All values from '+latestLab.date+' are within reference range.</p></div>';
+      } else {
+        var html='';
+        LAB_FIELDS.forEach(function(f){
+          var v=latestLab.values[f.key];
+          if(v===undefined) return;
+          if(v>f.high) html+='<div class="alert-item"><span>'+f.label+'</span><span class="flag-high">'+v+' '+f.unit+' (high)</span></div>';
+          else if(v<f.low) html+='<div class="alert-item"><span>'+f.label+'</span><span class="flag-low">'+v+' '+f.unit+' (low)</span></div>';
+        });
+        alertsWrap.innerHTML=html;
+      }
+    });
+  }
+
+  document.getElementById('dash-go-cycle').addEventListener('click', function(){ switchView('cycle'); });
+  document.getElementById('dash-go-labs').addEventListener('click', function(){ switchView('labs'); });
+  document.getElementById('dash-go-history').addEventListener('click', function(){ switchView('history'); });
+
+  /* ============================================================
+     EXPORT/IMPORT FUNCTIONS
+     ============================================================ */
+  function exportAsJSON(){
+    Promise.all([dbGetAllRecords(), dbGetAllLabs()]).then(function(res){
+      var data = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        cycles: res[0],
+        labs: res[1]
+      };
+      var json = JSON.stringify(data, null, 2);
+      var blob = new Blob([json], {type: 'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Data exported successfully!');
+    }).catch(function(err){
+      alert('Error exporting data: ' + err.message);
+    });
+  }
+
+  function exportAsCSV(){
+    dbGetAllRecords().then(function(records){
+      var csv = 'Date,Cycle,Phase,Time Started,Time Ended,Volume (mL),Fluid Color,Appearance,Notes\n';
+      records.forEach(function(dayRecord){
+        dayRecord.cycles.forEach(function(cycle, cycleIdx){
+          var cycleNum = cycleIdx + 1;
+          ['drain', 'dwell', 'exchange'].forEach(function(phase){
+            var phaseData = cycle[phase];
+            if(phaseData && phaseData.start){
+              var row = [
+                dayRecord.date,
+                cycleNum,
+                phase.charAt(0).toUpperCase() + phase.slice(1),
+                phaseData.start || '',
+                phaseData.end || '',
+                phaseData.volumeOut || phaseData.volumeIn || '',
+                phaseData.color || '',
+                phaseData.appearance || '',
+                cycle.notes ? '"' + cycle.notes.replace(/"/g, '""') + '"' : ''
+              ];
+              csv += row.join(',') + '\n';
+            }
+          });
+        });
+      });
+      var blob = new Blob([csv], {type: 'text/csv'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-cycles-' + new Date().toISOString().split('T')[0] + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Cycles exported to CSV!');
+    }).catch(function(err){
+      alert('Error exporting CSV: ' + err.message);
+    });
+  }
+
+  function importFromJSON(){
+    var fileInput = document.getElementById('import-file');
+    fileInput.click();
+  }
+
+  document.getElementById('import-file').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(event){
+      try {
+        var data = JSON.parse(event.target.result);
+        if(!data.cycles || !data.labs) throw new Error('Invalid backup file format');
+        
+        var cyclePromises = data.cycles.map(function(rec){
+          return dbSaveRecord(rec);
+        });
+        var labPromises = data.labs.map(function(lab){
+          return dbSaveOrUpdateLab(lab);
+        });
+        
+        Promise.all(cyclePromises.concat(labPromises)).then(function(){
+          renderHistoryList();
+          renderDashboard();
+          alert('✓ Data imported successfully! ' + data.cycles.length + ' date records and ' + data.labs.length + ' lab results restored.');
+        }).catch(function(err){
+          alert('Error importing data: ' + err.message);
+        });
+      } catch(err){
+        alert('Error reading backup file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  document.getElementById('dash-print-btn').addEventListener('click', function(){ window.print(); });
+
+  /* ============================================================
+     DATA MANAGER FUNCTIONS
+     ============================================================ */
+
+  function filterRecordsByDateRange(records, fromDate, toDate){
+    if(!fromDate || !toDate) return [];
+    return records.filter(function(rec){
+      return rec.date >= fromDate && rec.date <= toDate;
+    });
+  }
+
+  function filterLabsByDateRange(labs, fromDate, toDate){
+    if(!fromDate || !toDate) return [];
+    return labs.filter(function(lab){
+      return lab.date >= fromDate && lab.date <= toDate;
+    });
+  }
+
+  function previewCyclesData(){
+    var fromDate = document.getElementById('cycles-from-date').value;
+    var toDate = document.getElementById('cycles-to-date').value;
+    if(!fromDate || !toDate){
+      document.getElementById('cycles-preview').innerHTML = '<span style="color:var(--color-muted);">Please select both dates</span>';
+      return;
+    }
+
+    dbGetAllRecords().then(function(records){
+      var filtered = filterRecordsByDateRange(records, fromDate, toDate);
+      var totalCycles = 0, totalOut = 0, totalIn = 0;
+      
+      filtered.forEach(function(dayRec){
+        dayRec.cycles.forEach(function(c){
+          if(c.saved) {
+            totalCycles++;
+            if(c.drain && c.drain.volumeOut) totalOut += parseInt(c.drain.volumeOut) || 0;
+            if(c.dwell && c.dwell.volumeIn) totalIn += parseInt(c.dwell.volumeIn) || 0;
+          }
+        });
+      });
+
+      var html = '<strong>' + filtered.length + ' days</strong> (' + fromDate + ' to ' + toDate + ')<br>';
+      html += '📍 ' + totalCycles + ' cycles recorded<br>';
+      html += '💧 Total drained: ' + totalOut + ' mL<br>';
+      html += '💧 Total instilled: ' + totalIn + ' mL<br>';
+      html += '⚖️  Net: ' + (totalOut - totalIn) + ' mL';
+      document.getElementById('cycles-preview').innerHTML = html;
+    });
+  }
+
+  function exportFilteredCyclesCSV(){
+    var fromDate = document.getElementById('cycles-from-date').value;
+    var toDate = document.getElementById('cycles-to-date').value;
+    if(!fromDate || !toDate){
+      alert('Please select both dates');
+      return;
+    }
+
+    dbGetAllRecords().then(function(records){
+      var filtered = filterRecordsByDateRange(records, fromDate, toDate);
+      var csv = 'Date,Cycle,Phase,Time Started,Time Ended,Volume (mL),Fluid Color,Appearance,Notes\n';
+      
+      filtered.forEach(function(dayRecord){
+        dayRecord.cycles.forEach(function(cycle, cycleIdx){
+          var cycleNum = cycleIdx + 1;
+          ['drain', 'dwell', 'exchange'].forEach(function(phase){
+            var phaseData = cycle[phase];
+            if(phaseData && phaseData.start){
+              var row = [
+                dayRecord.date,
+                cycleNum,
+                phase.charAt(0).toUpperCase() + phase.slice(1),
+                phaseData.start || '',
+                phaseData.end || '',
+                phaseData.volumeOut || phaseData.volumeIn || '',
+                phaseData.color || '',
+                phaseData.appearance || '',
+                cycle.notes ? '"' + cycle.notes.replace(/"/g, '""') + '"' : ''
+              ];
+              csv += row.join(',') + '\n';
+            }
+          });
+        });
+      });
+
+      var blob = new Blob([csv], {type: 'text/csv'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-cycles-' + fromDate + '-to-' + toDate + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Cycles exported! (' + filtered.length + ' days)');
+    }).catch(function(err){
+      alert('Error: ' + err.message);
+    });
+  }
+
+  function exportFilteredCyclesJSON(){
+    var fromDate = document.getElementById('cycles-from-date').value;
+    var toDate = document.getElementById('cycles-to-date').value;
+    if(!fromDate || !toDate){
+      alert('Please select both dates');
+      return;
+    }
+
+    dbGetAllRecords().then(function(records){
+      var filtered = filterRecordsByDateRange(records, fromDate, toDate);
+      var data = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        dateRange: {from: fromDate, to: toDate},
+        cycles: filtered
+      };
+      var json = JSON.stringify(data, null, 2);
+      var blob = new Blob([json], {type: 'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-cycles-' + fromDate + '-to-' + toDate + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Cycles exported! (' + filtered.length + ' days)');
+    }).catch(function(err){
+      alert('Error: ' + err.message);
+    });
+  }
+
+  function previewLabsData(){
+    var fromDate = document.getElementById('labs-from-date').value;
+    var toDate = document.getElementById('labs-to-date').value;
+    if(!fromDate || !toDate){
+      document.getElementById('labs-preview').innerHTML = '<span style="color:var(--color-muted);">Please select both dates</span>';
+      return;
+    }
+
+    dbGetAllLabs().then(function(labs){
+      var filtered = filterLabsByDateRange(labs, fromDate, toDate);
+      var html = '<strong>' + filtered.length + ' test(s)</strong> (' + fromDate + ' to ' + toDate + ')<br>';
+      
+      if(filtered.length > 0){
+        html += '<small style="color:var(--color-muted);">Dates: ';
+        var dates = filtered.map(function(l){ return l.date; }).join(', ');
+        html += dates + '</small>';
+      }
+
+      document.getElementById('labs-preview').innerHTML = html;
+    });
+  }
+
+  function exportFilteredLabsCSV(){
+    var fromDate = document.getElementById('labs-from-date').value;
+    var toDate = document.getElementById('labs-to-date').value;
+    if(!fromDate || !toDate){
+      alert('Please select both dates');
+      return;
+    }
+
+    dbGetAllLabs().then(function(labs){
+      var filtered = filterLabsByDateRange(labs, fromDate, toDate);
+      var csv = 'Date,Test,Result,Unit,Reference Range\n';
+      
+      filtered.forEach(function(lab){
+        LAB_FIELDS.forEach(function(f){
+          var v = lab.values[f.key];
+          if(v !== undefined){
+            var row = [
+              lab.date,
+              f.label,
+              v,
+              f.unit,
+              f.low + '-' + f.high
+            ];
+            csv += row.join(',') + '\n';
+          }
+        });
+      });
+
+      var blob = new Blob([csv], {type: 'text/csv'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-labs-' + fromDate + '-to-' + toDate + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Lab results exported! (' + filtered.length + ' test dates)');
+    }).catch(function(err){
+      alert('Error: ' + err.message);
+    });
+  }
+
+  function exportFilteredLabsJSON(){
+    var fromDate = document.getElementById('labs-from-date').value;
+    var toDate = document.getElementById('labs-to-date').value;
+    if(!fromDate || !toDate){
+      alert('Please select both dates');
+      return;
+    }
+
+    dbGetAllLabs().then(function(labs){
+      var filtered = filterLabsByDateRange(labs, fromDate, toDate);
+      var data = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        dateRange: {from: fromDate, to: toDate},
+        labs: filtered
+      };
+      var json = JSON.stringify(data, null, 2);
+      var blob = new Blob([json], {type: 'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-labs-' + fromDate + '-to-' + toDate + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Lab results exported! (' + filtered.length + ' test dates)');
+    }).catch(function(err){
+      alert('Error: ' + err.message);
+    });
+  }
+
+  function createFullBackup(){
+    Promise.all([dbGetAllRecords(), dbGetAllLabs()]).then(function(res){
+      var data = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        cycles: res[0],
+        labs: res[1]
+      };
+      var json = JSON.stringify(data, null, 2);
+      var blob = new Blob([json], {type: 'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'PD-Tracker-FULL-BACKUP-' + new Date().toISOString().split('T')[0] + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('✓ Full backup created!\nRecords: ' + res[0].length + ' days\nLab results: ' + res[1].length + ' tests');
+    }).catch(function(err){
+      alert('Error creating backup: ' + err.message);
+    });
+  }
+
+  function importBackupFile(){
+    var fileInput = document.getElementById('import-backup-file');
+    fileInput.click();
+  }
+
+  document.getElementById('import-backup-file').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    
+    document.getElementById('import-file-name').textContent = '📂 ' + file.name + ' - processing...';
+    
+    var reader = new FileReader();
+    reader.onload = function(event){
+      try {
+        var data = JSON.parse(event.target.result);
+        if(!data.cycles || !data.labs) throw new Error('Invalid backup file format');
+        
+        var cyclePromises = data.cycles.map(function(rec){
+          return dbSaveRecord(rec);
+        });
+        var labPromises = data.labs.map(function(lab){
+          return dbSaveOrUpdateLab(lab);
+        });
+        
+        Promise.all(cyclePromises.concat(labPromises)).then(function(){
+          renderHistoryList();
+          renderDashboard();
+          document.getElementById('import-file-name').textContent = '✓ ' + file.name + ' imported!';
+          alert('✓ Data imported successfully!\n' + data.cycles.length + ' date records and ' + data.labs.length + ' lab results restored.');
+          setTimeout(function(){
+            document.getElementById('import-file-name').textContent = 'No file selected';
+            e.target.value = '';
+          }, 3000);
+        }).catch(function(err){
+          alert('Error importing data: ' + err.message);
+          document.getElementById('import-file-name').textContent = 'Import failed';
+        });
+      } catch(err){
+        alert('Error reading backup file: ' + err.message);
+        document.getElementById('import-file-name').textContent = 'Invalid file';
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Data Manager Event Listeners
+  document.getElementById('cycles-preview-btn').addEventListener('click', previewCyclesData);
+  document.getElementById('cycles-export-csv-btn').addEventListener('click', exportFilteredCyclesCSV);
+  document.getElementById('cycles-export-json-btn').addEventListener('click', exportFilteredCyclesJSON);
+  document.getElementById('labs-preview-btn').addEventListener('click', previewLabsData);
+  document.getElementById('labs-export-csv-btn').addEventListener('click', exportFilteredLabsCSV);
+  document.getElementById('labs-export-json-btn').addEventListener('click', exportFilteredLabsJSON);
+  document.getElementById('full-backup-btn').addEventListener('click', createFullBackup);
+  document.getElementById('import-backup-btn').addEventListener('click', importBackupFile);
+
+  // Initialize date inputs with reasonable defaults
+  var today = todayStr();
+  var thirtyDaysAgo = new Date(new Date(today).getTime() - 30*24*60*60*1000).toISOString().split('T')[0];
+  document.getElementById('cycles-from-date').value = thirtyDaysAgo;
+  document.getElementById('cycles-to-date').value = today;
+  document.getElementById('labs-from-date').value = thirtyDaysAgo;
+  document.getElementById('labs-to-date').value = today;
+
+  /* ============================================================
+     INIT
+     ============================================================ */
+  cycleDateInput.value=todayStr();
+  labDateInput.value=todayStr();
+  renderLabForm();
+
+  getDB().then(function(){
+    return migrateFromLocalStorage();
+  }).then(function(){
+    return renderLabHistory();
+  }).then(function(){
+    return getDay(todayStr());
+  }).then(function(day){
+    return loadCycleIntoForm(nextUnsavedCycleNumber(day));
+  }).then(function(){
+    return refreshMonitoringTable();
+  }).then(function(){
+    return refreshDaySummary();
+  }).then(function(){
+    return renderDashboard();
+  }).catch(function(err){
+    showDbErrorBanner(err);
+  });
+
+})();
+</script>
+</body>
+</html>
